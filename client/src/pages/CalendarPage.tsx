@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { type ClientWithEvents, type BookingEvent, type Venue } from "@shared/schema";
-// import { getEventsForDate, isAuspicious, isFestival, isInauspicious } from "@/lib/hinduDates";
 import { useHinduCalendar } from "@/hooks/useHinduCalendar";
 import {
   ChevronLeft, ChevronRight, X, Calendar, Users, Phone,
