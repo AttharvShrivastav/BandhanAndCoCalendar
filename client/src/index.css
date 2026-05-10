@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Bandhan & Co. — Midnight Blue + Luxury Gold + Soft Ivory */
+    --background: 36 33% 96%;          /* #F8F5F0 Soft Ivory */
+    --foreground: 210 69% 10%;         /* near-black midnight */
+
+    --card: 36 28% 98%;                /* slightly warmer white */
+    --card-foreground: 210 69% 10%;
+
+    --popover: 36 28% 98%;
+    --popover-foreground: 210 69% 10%;
+
+    --primary: 210 69% 16%;            /* #0F2A44 Midnight Blue */
+    --primary-foreground: 36 33% 96%;  /* Ivory on blue */
+
+    --secondary: 38 49% 92%;           /* very light gold tint */
+    --secondary-foreground: 210 69% 16%;
+
+    --muted: 36 20% 91%;
+    --muted-foreground: 210 20% 45%;
+
+    --accent: 38 49% 57%;              /* #C8A45D Luxury Gold */
+    --accent-foreground: 210 69% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 36 33% 96%;
+
+    --border: 36 20% 85%;
+    --input: 36 20% 85%;
+    --ring: 210 69% 16%;
+
+    --radius: 0.5rem;
+
+    /* Semantic colors */
+    --auspicious: 120 45% 38%;
+    --festival: 38 49% 57%;
+    --booking-confirmed: 210 69% 16%;
+    --booking-tentative: 200 55% 40%;
+    --booking-cancelled: 0 55% 45%;
+  }
+
+  .dark {
+    --background: 210 69% 7%;
+    --foreground: 36 30% 92%;
+    --card: 210 60% 10%;
+    --card-foreground: 36 30% 92%;
+    --popover: 210 60% 10%;
+    --popover-foreground: 36 30% 92%;
+    --primary: 38 49% 57%;             /* Gold becomes primary on dark */
+    --primary-foreground: 210 69% 7%;
+    --secondary: 210 50% 16%;
+    --secondary-foreground: 36 30% 92%;
+    --muted: 210 40% 14%;
+    --muted-foreground: 36 15% 55%;
+    --accent: 38 49% 57%;
+    --accent-foreground: 210 69% 7%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 36 30% 92%;
+    --border: 210 30% 20%;
+    --input: 210 30% 20%;
+    --ring: 38 49% 57%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3, .display {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+/* Calendar custom styles */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day-cell {
+  min-height: 100px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.day-cell:hover {
+  background: hsl(var(--secondary));
+}
+
+.event-pill {
+  font-size: 10px;
+  line-height: 1.3;
+  border-radius: 3px;
+  padding: 1px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.auspicious-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--auspicious));
+  display: inline-block;
+}
+
+.festival-badge {
+  font-size: 9px;
+  background: hsl(var(--festival) / 0.15);
+  color: hsl(var(--festival));
+  border: 1px solid hsl(var(--festival) / 0.3);
+  border-radius: 2px;
+  padding: 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* Thin gold divider — brand element */
+.gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(38 49% 57% / 0.6), transparent);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
