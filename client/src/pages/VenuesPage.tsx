@@ -25,10 +25,8 @@ function fmtDate(d: string) {
   return new Date(d + "T12:00:00").toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
-
 // ─── Inline color picker ──────────────────────────────────────────────────────
-// ─── Inline color picker ──────────────────────────────────────────────────────
-function ColorPicker({ value, onChange }: { value?: string | null; onChange: (c: string | null) => void }) {
+function ColorPicker({ value, onChange, usedColors }: { value?: string | null; onChange: (c: string | null) => void; usedColors: string[] }) {
   return (
     <div className="w-full">
       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-3">
@@ -40,20 +38,28 @@ function ColorPicker({ value, onChange }: { value?: string | null; onChange: (c:
       </label>
       
       <div className="flex flex-wrap gap-2 items-center">
-        {COLOR_PALETTE.map(hex => (
-          <button
-            key={hex}
-            type="button"
-            title={hex}
-            onClick={() => onChange(value === hex ? null : hex)}
-            className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 flex-shrink-0 shadow-sm"
-            style={{
-              background: hex,
-              borderColor: value === hex ? "#fff" : "transparent",
-              boxShadow: value === hex ? `0 0 0 2px ${hex}, 0 2px 4px rgba(0,0,0,0.1)` : "none",
-            }}
-          />
-        ))}
+        {COLOR_PALETTE.map(hex => {
+          const isTaken = usedColors.includes(hex) && value !== hex;
+          
+          return (
+            <button
+              key={hex}
+              type="button"
+              title={isTaken ? "Color already in use" : hex}
+              disabled={isTaken}
+              onClick={() => onChange(value === hex ? null : hex)}
+              className="w-6 h-6 rounded-full border-2 transition-transform flex-shrink-0 shadow-sm"
+              style={{
+                background: hex,
+                borderColor: value === hex ? "#fff" : "transparent",
+                boxShadow: value === hex ? `0 0 0 2px ${hex}, 0 2px 4px rgba(0,0,0,0.1)` : "none",
+                opacity: isTaken ? 0.2 : 1,
+                cursor: isTaken ? "not-allowed" : "pointer",
+                transform: value === hex ? "scale(1.15)" : "scale(1)",
+              }}
+            />
+          );
+        })}
       </div>
       
       {value && (
@@ -67,17 +73,18 @@ function ColorPicker({ value, onChange }: { value?: string | null; onChange: (c:
   );
 }
 
-
 // ─── Main Venues Page ─────────────────────────────────────────────────────────
 export default function VenuesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [expandedVenue, setExpandedVenue] = useState<number | null>(null);
-  const [color, setColor] = useState("hsl(210,69%,16%)"); 
 
   const { data: venues = [], isLoading } = useQuery<Venue[]>({ queryKey: ["/api/venues"] });
   const { data: clients = [] } = useQuery<ClientWithEvents[]>({ queryKey: ["/api/clients"] });
+
+  // Calculate globally used colors so we can pass them to the picker
+  const usedColors = useMemo(() => venues.map(v => v.color).filter(Boolean) as string[], [venues]);
 
   const eventsByVenue = useMemo(() => {
     const map: Record<string, Array<{ event: BookingEvent; client: ClientWithEvents }>> = {};
@@ -103,6 +110,9 @@ export default function VenuesPage() {
       form.reset();
       toast({ title: "Venue added" });
     },
+    onError: (err: any) => {
+      toast({ title: "Failed to add venue", description: err.message, variant: "destructive" });
+    }
   });
 
   const deleteMutation = useMutation({
@@ -118,6 +128,17 @@ export default function VenuesPage() {
     defaultValues: { name: "", location: "", capacity: undefined, contactPerson: "", contactPhone: "", color:"hsl(210,69%,16%)" },
   });
 
+  const openAddModal = () => {
+    // Smart Default: Find the first color in the palette that isn't currently used
+    const firstAvailableColor = COLOR_PALETTE.find(c => !usedColors.includes(c)) || "hsl(210,69%,16%)";
+    
+    form.reset({ 
+      name: "", location: "", capacity: undefined, contactPerson: "", contactPhone: "", 
+      color: firstAvailableColor 
+    });
+    setShowForm(true);
+  };
+
   const totalEvents = Object.values(eventsByVenue).reduce((s, a) => s + a.length, 0);
 
   return (
@@ -129,7 +150,7 @@ export default function VenuesPage() {
             {venues.length} venue{venues.length !== 1 ? "s" : ""} · {totalEvents} event{totalEvents !== 1 ? "s" : ""} assigned
           </p>
         </div>
-        <Button data-testid="button-add-venue" onClick={() => setShowForm(true)} size="sm">
+        <Button data-testid="button-add-venue" onClick={openAddModal} size="sm">
           <Plus size={14} className="mr-1" /> Add Venue
         </Button>
       </header>
@@ -162,8 +183,8 @@ export default function VenuesPage() {
                   {/* Venue header */}
                   <div className="p-5 flex items-start gap-4">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: "hsla(210,69%,16%,0.1)" }}>
-                      <Building2 size={18} style={{ color: "hsl(210,69%,16%)" }} />
+                      style={{ background: `${venue.color || "hsl(210,69%,16%)"}22` }}>
+                      <Building2 size={18} style={{ color: venue.color || "hsl(210,69%,16%)" }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -184,7 +205,7 @@ export default function VenuesPage() {
                       </div>
                       {nextItem && (
                         <div className="mt-1.5 text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: eventDisplayColor(nextItem.event) }} />
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: eventDisplayColor(nextItem.event, venues) }} />
                           Next: <span className="font-medium text-foreground ml-0.5">{nextItem.client.clientName}</span>
                           <span className="ml-0.5">({EVENT_LABELS[nextItem.event.eventType]})</span>
                           <span className="ml-0.5">on {fmtDate(nextItem.event.eventDate)}</span>
@@ -194,29 +215,6 @@ export default function VenuesPage() {
                     </div>
                   </div>
 
-                  {/* Action buttons row */}
-                  {/* <div className="flex border-t border-border divide-x divide-border">
-                    <Link href={`/app/venues/${venue.id}/calendar`}>
-                      <a data-testid={`open-calendar-${venue.id}`}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                          <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                        Venue Calendar
-                        <ExternalLink size={10} className="opacity-50" />
-                      </a>
-                    </Link>
-
-                    {venueItems.length > 0 && (
-                      <button data-testid={`toggle-events-${venue.id}`}
-                        onClick={() => setExpandedVenue(isExpanded ? null : venue.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors">
-                        {venueItems.length} event{venueItems.length !== 1 ? "s" : ""}
-                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      </button>
-                    )}
-                  </div> */}
                   {/* Action buttons row */}
                   <div className="flex border-t border-border divide-x divide-border">
                     <Link 
@@ -249,12 +247,12 @@ export default function VenuesPage() {
                         .sort((a, b) => a.event.eventDate.localeCompare(b.event.eventDate))
                         .map(({ event: ev, client: c }) => (
                           <div key={ev.id} data-testid={`venue-event-${ev.id}`} className="px-5 py-3 flex items-start gap-3">
-                            <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ background: eventDisplayColor(ev) }} />
+                            <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ background: eventDisplayColor(ev, venues) }} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-medium">{c.clientName}</span>
                                 {(c.brideName || c.groomName) && <span className="text-xs text-muted-foreground">({[c.brideName, c.groomName].filter(Boolean).join(" & ")})</span>}
-                                <span className="text-[10px] font-semibold px-1.5 py-0 rounded" style={{ background: eventDisplayColor(ev) + "22", color: eventDisplayColor(ev) }}>
+                                <span className="text-[10px] font-semibold px-1.5 py-0 rounded" style={{ background: eventDisplayColor(ev, venues) + "22", color: eventDisplayColor(ev, venues) }}>
                                   {EVENT_LABELS[ev.eventType]}
                                 </span>
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white" style={{ background: STATUS_COLORS[ev.status] }}>{ev.status}</span>
@@ -285,17 +283,17 @@ export default function VenuesPage() {
             </div>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(d => {
-  if (d.contactPhone) {
-    const cleaned = d.contactPhone.replace(/\D/g, "");
-    const corePhone = cleaned.slice(-10);
-    if (corePhone.length !== 10) {
-      toast({ title: "Invalid Phone Number", description: "Please enter a valid 10-digit contact number.", variant: "destructive" });
-      return;
-    }
-    d.contactPhone = corePhone; // Silently clean it for the DB!
-  }
-  createMutation.mutate(d);
-})} className="p-5 space-y-4">
+                if (d.contactPhone) {
+                  const cleaned = d.contactPhone.replace(/\D/g, "");
+                  const corePhone = cleaned.slice(-10);
+                  if (corePhone.length !== 10) {
+                    toast({ title: "Invalid Phone Number", description: "Please enter a valid 10-digit contact number.", variant: "destructive" });
+                    return;
+                  }
+                  d.contactPhone = corePhone; 
+                }
+                createMutation.mutate(d);
+              })} className="p-5 space-y-4">
                 <FormField control={form.control} name="name" render={({ field }) => (
                   <FormItem><FormLabel className="text-xs">Venue Name</FormLabel>
                     <FormControl><Input {...field} data-testid="input-venueName" placeholder="e.g. Grand Palace Banquet" /></FormControl>
@@ -325,7 +323,6 @@ export default function VenuesPage() {
                   )} />
                 </div>
 
-                {/* Custom Color Picker Field - NOW STRICTLY FULL WIDTH */}
                 <div className="pt-2">
                   <FormField control={form.control} name="color" render={({ field }) => (
                     <FormItem>
@@ -333,7 +330,8 @@ export default function VenuesPage() {
                         <div className="rounded-xl border border-border bg-muted/20 p-4">
                           <ColorPicker
                             value={field.value}
-                            onChange={(c) => field.onChange(c || "hsl(210,69%,16%)")} 
+                            onChange={(c) => field.onChange(c || "hsl(210,69%,16%)")}
+                            usedColors={usedColors} 
                           />
                         </div>
                       </FormControl>
