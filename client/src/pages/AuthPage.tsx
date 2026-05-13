@@ -156,9 +156,20 @@ export default function AuthPage() {
     }
     
     try {
-      // FIX: Pass the raw object here as well!
-      const res = await apiRequest("POST", "/api/auth/verify-otp", { phone, otp });
+      // FIX: Pass the rememberMe state to the backend!
+      const res = await apiRequest("POST", "/api/auth/verify-otp", { phone, otp, rememberMe });
       const data = await res.json();
+
+      // ── SESSION LOCK LOGIC ──
+      if (isLogin) {
+        if (!rememberMe) {
+          localStorage.setItem("requires_session_lock", "true");
+          sessionStorage.setItem("session_active", "true");
+        } else {
+          localStorage.removeItem("requires_session_lock");
+          sessionStorage.removeItem("session_active");
+        }
+      }
 
       setOtpVerified(true);
       toast({ title: "Phone verified", description: "Logging you in..." });
@@ -251,19 +262,25 @@ export default function AuthPage() {
         
         let res;
         
-        if (mode === "register") {
-          if (!name.trim()) { toast({ title: "Your name is required", variant: "destructive" }); return; }
-          if (password.length < 6) { toast({ title: "Password must be at least 6 characters", variant: "destructive" }); return; }
-          if (password !== confirmPassword) { toast({ title: "Passwords do not match", variant: "destructive" }); return; }
-          
-          // FIX 1: Use apiRequest for Registration
-          res = await apiRequest("POST", "/api/auth/register", { name, email, password, phone: phone || undefined });
-        } else {
+        if (mode === "register") {} else {
           // FIX 2: Removed 'const' and passed { email, password } instead of 'data'
           res = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe });
         }
 
         const data = await res.json();
+
+        // ── SESSION LOCK LOGIC ──
+        if (isLogin) {
+          if (!rememberMe) {
+            // Flag that this user wants a strict Tab-Only session
+            localStorage.setItem("requires_session_lock", "true");
+            sessionStorage.setItem("session_active", "true");
+          } else {
+            // Standard 30-day persistent session
+            localStorage.removeItem("requires_session_lock");
+            sessionStorage.removeItem("session_active");
+          }
+        }
 
         // Tell React Query that the user session has changed
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
@@ -606,6 +623,22 @@ export default function AuthPage() {
                       >
                         <CheckCircle2 size={15} className="flex-shrink-0" />
                         <span className="font-medium">Phone verified — {phone}</span>
+                      </div>
+                    )}
+
+                    {/* NEW: Remember Me Checkbox for Phone */}
+                    {isLogin && (
+                      <div className="flex items-center gap-2 mt-3 pl-1">
+                        <input 
+                          type="checkbox" 
+                          id="remember-phone" 
+                          checked={rememberMe} 
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-muted-foreground text-[hsl(210,69%,16%)] focus:ring-[hsl(210,69%,16%)]"
+                        />
+                        <label htmlFor="remember-phone" className="text-xs text-muted-foreground cursor-pointer select-none">
+                          Keep me signed in for 30 days
+                        </label>
                       </div>
                     )}
                   </>

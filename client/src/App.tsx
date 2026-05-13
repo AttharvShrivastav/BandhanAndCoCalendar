@@ -86,15 +86,32 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 // ── Auth Guard Wrapper ───────────────────────────────────────────────────────
+// ── Auth Guard Wrapper ───────────────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
   const [, navigate] = useHashLocation();
+
+  // ── SESSION LOCK BOUNCER ──
+  useEffect(() => {
+    const requiresLock = localStorage.getItem("requires_session_lock") === "true";
+    const isSessionActive = sessionStorage.getItem("session_active") === "true";
+
+    // If the browser restored the tab, sessionStorage will be empty but localStorage will still have the lock.
+    if (requiresLock && !isSessionActive) {
+      // Fire the kill-switch to the backend, clear the cache, and kick them out.
+      apiRequest("POST", "/api/auth/logout").catch(() => {}).finally(() => {
+        queryClient.clear();
+        localStorage.removeItem("requires_session_lock");
+        navigate("/auth");
+      });
+    }
+  }, [navigate]);
   
   const { isLoading, error, data } = useQuery({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-        const res = await apiRequest("GET", "/api/auth/me");
+      const res = await apiRequest("GET", "/api/auth/me");
           
-        const payload = await res.json();
+      const payload = await res.json();
 
       const isSuperAdmin = payload.user?.role === "superadmin";
       const org = payload.organization;

@@ -107,6 +107,13 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     res.json({ message: "Logged in successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   });
 
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid"); // Ensure the browser drops the cookie
+      res.json({ success: true, message: "Logged out" });
+    });
+  });
+
   app.post("/api/auth/send-otp", async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: "Phone number required" });
@@ -119,7 +126,7 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
   });
 
   app.post("/api/auth/verify-otp", async (req, res) => {
-    const { phone, otp } = req.body;
+    const { phone, otp, rememberMe } = req.body;
     if (!phone || !otp) return res.status(400).json({ error: "Phone and OTP required" });
     const cleanPhone = normalizePhone(phone);
 
@@ -130,6 +137,12 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     req.session.userId = user.id;
     req.session.orgId = user.orgId!;
     req.session.role = user.role;
+
+    if (rememberMe) {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 Days
+    } else {
+      req.session.cookie.expires = false as any; // Browser Session Only
+    }
 
     res.json({ message: "Logged in via Phone", user: { id: user.id, name: user.name, role: user.role } });
   });
@@ -404,7 +417,6 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
   });
 
 
-  // ─── Workspace Security & Starred Dates ───
   // ─── Workspace Security & Starred Dates ───
   app.patch("/api/auth/security", requireAuth, async (req: Request, res: Response) => {
     const { currentPwd, isDeletePinEnabled, newPin, currentPin } = req.body;
