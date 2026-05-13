@@ -277,7 +277,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Pricing Section ── */}
-      <section id="pricing-section" className="px-8 md:px-16 py-20 border-t border-border">
+      {/* <section id="pricing-section" className="px-8 md:px-16 py-20 border-t border-border">
         <div className="max-w-5xl mx-auto">
           <div data-reveal style={revealBase} className="text-center mb-12">
             <div className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border mb-4"
@@ -397,7 +397,7 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* ── CTA Banner ── */}
       <section className="px-8 md:px-16 py-16 text-center border-t border-border relative overflow-hidden"

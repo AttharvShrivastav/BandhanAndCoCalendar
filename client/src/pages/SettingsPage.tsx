@@ -3,12 +3,12 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  User, Lock, Trash2, Bell, Megaphone, ChevronRight,
+  User, Lock, Trash2, Bell, Megaphone, ChevronRight, KeyRound,
   Eye, EyeOff, AlertTriangle, CheckCircle2, Save,
   Shield, Mail, Phone, HelpCircle, MessageSquare,
   ChevronDown, ChevronUp, MapPin, Clock, Send, ExternalLink,
   CreditCard, Sparkles, Crown, Zap, Check, Calendar,
-  RefreshCw, XCircle, ArrowUpRight, Receipt, BadgeCheck,
+  RefreshCw, XCircle, ArrowUpRight, Receipt, BadgeCheck, ShieldAlert,
   Headphones, FlaskConical, Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,9 +71,10 @@ export default function SettingsPage() {
   const queryClient = useQueryClient(); // 🔥 ADDED: Cache Controller
 
   // ── Fetch Real Data ──
-  const { data: authData } = useQuery<{ user: any; organization: any }>({ queryKey: ["/api/auth/me"] });
+  const { data: authData } = useQuery<{ user: any; organization: any; isImpersonating?: boolean }>({ queryKey: ["/api/auth/me"] });
   const user = authData?.user;
   const org = authData?.organization;
+  const isImpersonating = authData?.isImpersonating;  
 
   // ── Manage Account state ──
   const [name, setName] = useState("");
@@ -87,7 +88,10 @@ export default function SettingsPage() {
       setEmail(user.email || "");
       setPhone(user.phone || "");
     }
-  }, [user]);
+    if (org) {
+      setIsDeletePinEnabled(org.isDeletePinEnabled);
+    }
+  }, [user, org]);
 
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -95,6 +99,15 @@ export default function SettingsPage() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Security Settings State
+  // Security Settings State
+  const [isDeletePinEnabled, setIsDeletePinEnabled] = useState(true);
+  const [currentDeletePin, setCurrentDeletePin] = useState(""); // <-- ADD THIS
+  const [newDeletePin, setNewDeletePin] = useState("");
+
+  const [securityPwd, setSecurityPwd] = useState("");
+  const [showSecurityPwd, setShowSecurityPwd] = useState(false);
 
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [showDeleteSection, setShowDeleteSection] = useState(false);
@@ -272,6 +285,33 @@ export default function SettingsPage() {
     }
   }
 
+  async function updateSecuritySettings() {
+    if (!securityPwd) { toast({ title: "Password required to change security settings", variant: "destructive" }); return; }
+    if (newDeletePin && newDeletePin.length !== 6) { toast({ title: "New PIN must be exactly 6 digits", variant: "destructive" }); return; }
+    if (newDeletePin && !currentDeletePin) { toast({ title: "Current PIN is required to change it", variant: "destructive" }); return; }
+    
+    try {
+      const res = await fetch("/api/auth/security", { 
+        method: "PATCH", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ 
+          currentPwd: securityPwd, 
+          isDeletePinEnabled, 
+          newPin: newDeletePin || undefined,
+          currentPin: currentDeletePin || undefined 
+        }) 
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      setSecurityPwd(""); setNewDeletePin(""); setCurrentDeletePin("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Security settings updated" });
+    } catch (err: any) { 
+      toast({ title: "Update Failed", description: err.message, variant: "destructive" }); 
+    }
+  }
+
   function deleteAccount() {
     if (deleteConfirmText !== "DELETE") {
       toast({ title: "Type DELETE to confirm", variant: "destructive" }); return;
@@ -331,198 +371,165 @@ export default function SettingsPage() {
       <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="max-w-2xl mx-auto space-y-5">
 
-          {/* ── MANAGE ACCOUNT ── */}
+{/* ── MANAGE ACCOUNT ── */}
           {activeTab === "account" && (
             <>
-              {/* Account Details */}
-              <Section icon={User} title="Account Details" subtitle="Update your name, email and phone number">
-                <Row>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Full Name</label>
-                      <div className="relative">
-                        <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={name} onChange={e => setName(e.target.value)} className="pl-8" placeholder="Your name" data-testid="input-settings-name" />
-                      </div>
-                    </div>
-                    {/* Responsive Grid: 1 col on mobile, 2 cols on tablet+ */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email Address</label>
-                        <div className="relative">
-                          <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                          <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-8" placeholder="you@example.com" data-testid="input-settings-email" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Phone Number</label>
-                        <div className="relative">
-                          <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                          <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="pl-8" placeholder="+91 98765 43210" data-testid="input-settings-phone" />
-                        </div>
-                      </div>
-                    </div>
-                    <Button size="sm" onClick={saveAccountDetails} data-testid="button-save-account" className="w-full md:w-auto"
-                      style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
-                      <Save size={13} className="mr-1.5" /> Save Changes
-                    </Button>
+              {isImpersonating ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-8 flex flex-col items-center justify-center text-center space-y-3 mb-6">
+                  <ShieldAlert size={36} className="text-amber-600" />
+                  <div>
+                    <h3 className="text-base font-semibold text-amber-700" style={{ fontFamily: "Playfair Display, serif" }}>Restricted in Support Mode</h3>
+                    <p className="text-xs text-amber-600/80 mt-1 max-w-md mx-auto leading-relaxed">
+                      Personal account details and passwords cannot be viewed or modified while impersonating a client workspace to protect user privacy.
+                    </p>
                   </div>
-                </Row>
-              </Section>
-
-              {/* Change Password */}
-              <Section icon={Lock} title="Change Password" subtitle="Update your account password">
-                <Row>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Current Password</label>
-                      <div className="relative">
-                        <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type={showCurrent ? "text" : "password"}
-                          value={currentPwd}
-                          onChange={e => setCurrentPwd(e.target.value)}
-                          className="pl-8 pr-9"
-                          placeholder="Enter current password"
-                          data-testid="input-current-password"
-                        />
-                        <button type="button" onClick={() => setShowCurrent(p => !p)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                          {showCurrent ? <EyeOff size={13} /> : <Eye size={13} />}
-                        </button>
-                      </div>
-                    </div>
-                    {/* Responsive Grid: 1 col on mobile, 2 cols on tablet+ */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">New Password</label>
-                        <div className="relative">
-                          <Input
-                            type={showNew ? "text" : "password"}
-                            value={newPwd}
-                            onChange={e => setNewPwd(e.target.value)}
-                            className="pr-9"
-                            placeholder="Min. 6 characters"
-                            data-testid="input-new-password"
-                          />
-                          <button type="button" onClick={() => setShowNew(p => !p)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                            {showNew ? <EyeOff size={13} /> : <Eye size={13} />}
-                          </button>
-                        </div>
-                        {/* Strength bar */}
-                        {newPwd && (
-                          <div className="flex gap-1 mt-1.5">
-                            {[1, 2, 3].map(i => (
-                              <div key={i} className="h-1 flex-1 rounded-full transition-colors"
-                                style={{ background: newPwd.length >= i * 4 ? (i === 1 ? "#e74c3c" : i === 2 ? "#f39c12" : "#27ae60") : "hsl(var(--muted))" }} />
-                            ))}
+                </div>
+              ) : (
+                <>
+                  <Section icon={User} title="Account Details" subtitle="Update your name, email and phone number">
+                    <Row>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Full Name</label>
+                          <div className="relative">
+                            <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input value={name} onChange={e => setName(e.target.value)} className="pl-8" placeholder="Your name" />
                           </div>
-                        )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email Address</label>
+                            <div className="relative">
+                              <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-8" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Phone Number</label>
+                            <div className="relative">
+                              <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                              <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="pl-8" />
+                            </div>
+                          </div>
+                        </div>
+                        <Button size="sm" onClick={saveAccountDetails} className="w-full md:w-auto" style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
+                          <Save size={13} className="mr-1.5" /> Save Changes
+                        </Button>
                       </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Confirm New Password</label>
-                        <div className="relative">
-                          <Input
-                            type={showConfirm ? "text" : "password"}
-                            value={confirmPwd}
-                            onChange={e => setConfirmPwd(e.target.value)}
-                            className="pr-9"
-                            placeholder="Repeat new password"
-                            data-testid="input-confirm-password"
-                          />
-                          <button type="button" onClick={() => setShowConfirm(p => !p)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                            {showConfirm ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </Row>
+                  </Section>
+
+                  <div className="mt-5">
+                    <Section icon={Lock} title="Change Password" subtitle="Update your account password">
+                      <Row>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Current Password</label>
+                            <div className="relative">
+                              <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                              <Input type={showCurrent ? "text" : "password"} value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} className="pl-8 pr-9" />
+                              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                {showCurrent ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1.5">New Password</label>
+                              <div className="relative">
+                                <Input type={showNew ? "text" : "password"} value={newPwd} onChange={e => setNewPwd(e.target.value)} className="pr-9" />
+                                <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                  {showNew ? <EyeOff size={13} /> : <Eye size={13} />}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Confirm New Password</label>
+                              <div className="relative">
+                                <Input type={showConfirm ? "text" : "password"} value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} className="pr-9" />
+                                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                  {showConfirm ? <EyeOff size={13} /> : <Eye size={13} />}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <Button size="sm" onClick={changePassword} className="w-full md:w-auto" style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
+                            <Shield size={13} className="mr-1.5" /> Update Password
+                          </Button>
+                        </div>
+                      </Row>
+                    </Section>
+                  </div>
+                </>
+              )}
+
+              {/* ── WORKSPACE SECURITY (Accessible to Impersonator) ── */}
+              <div className="mt-5">
+                <Section icon={KeyRound} title="Workspace Security" subtitle="Manage your Delete PIN and Data Safety features">
+                  <Row>
+                    <div className="space-y-5">
+                      
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">Require PIN for Deletions</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                            Force staff to enter a 6-digit PIN before permanently deleting clients or events from the workspace.
+                          </p>
+                        </div>
+                        <Toggle checked={isDeletePinEnabled} onChange={setIsDeletePinEnabled} />
+                      </div>
+
+                      {isDeletePinEnabled && (
+                        <div className="pt-4 border-t border-border space-y-4">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Current 6-digit Delete PIN (Required to change PIN)</label>
+                            <Input 
+                              type="text" 
+                              maxLength={6} 
+                              value={currentDeletePin} 
+                              onChange={e => setCurrentDeletePin(e.target.value.replace(/\D/g, ''))} 
+                              placeholder="Enter current PIN" 
+                              className="font-mono tracking-widest"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">New 6-digit Delete PIN (Optional)</label>
+                            <Input 
+                              type="text" 
+                              maxLength={6} 
+                              value={newDeletePin} 
+                              onChange={e => setNewDeletePin(e.target.value.replace(/\D/g, ''))} 
+                              placeholder="Leave blank to keep current PIN" 
+                              className="font-mono tracking-widest"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pt-2 border-t border-border bg-muted/20 -mx-4 md:-mx-5 px-4 md:px-5 pb-1 mt-2">
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5 mt-3">
+                          {isImpersonating ? "Confirm SuperAdmin Password to Override PIN *" : "Confirm Current Password to Save Changes *"}
+                        </label>
+                        <div className="relative mb-3">
+                          <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                          <Input type={showSecurityPwd ? "text" : "password"} value={securityPwd} onChange={e => setSecurityPwd(e.target.value)} className="pl-8 pr-9 bg-background" placeholder="Enter account password" />
+                          <button type="button" onClick={() => setShowSecurityPwd(!showSecurityPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                            {showSecurityPwd ? <EyeOff size={13} /> : <Eye size={13} />}
                           </button>
                         </div>
-                        {confirmPwd && newPwd && (
-                          <p className={`text-[11px] mt-1 flex items-center gap-1 ${newPwd === confirmPwd ? "text-green-600" : "text-red-500"}`}>
-                            {newPwd === confirmPwd
-                              ? <><CheckCircle2 size={10} /> Passwords match</>
-                              : <><AlertTriangle size={10} /> Passwords don't match</>}
-                          </p>
-                        )}
+                        <Button size="sm" onClick={updateSecuritySettings} className="w-full md:w-auto" style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
+                          <Save size={13} className="mr-1.5" /> Save Security Settings
+                        </Button>
                       </div>
-                    </div>
-                    <Button size="sm" onClick={changePassword} data-testid="button-change-password" className="w-full md:w-auto"
-                      style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
-                      <Shield size={13} className="mr-1.5" /> Update Password
-                    </Button>
-                  </div>
-                </Row>
-              </Section>
 
-              {/* Delete Account */}
-              <Section icon={Trash2} title="Delete Account" subtitle="Permanently remove your account and all data">
-                <Row danger>
-                  {!showDeleteSection ? (
-                    <div className="flex flex-col sm:flex-row items-start gap-3 md:gap-4">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 sm:mt-0.5"
-                        style={{ background: "rgba(220,38,38,0.1)" }}>
-                        <AlertTriangle size={15} className="text-red-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">Permanently delete this account</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                          This will permanently delete your account, all bookings, clients, and venue data. This action cannot be undone.
-                        </p>
-                        <button
-                          onClick={() => setShowDeleteSection(true)}
-                          className="mt-3 text-xs font-medium text-red-600 hover:text-red-700 underline underline-offset-2 transition-colors w-full sm:w-auto text-left"
-                          data-testid="button-show-delete"
-                        >
-                          I want to delete my account
-                        </button>
-                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-lg border border-red-200"
-                        style={{ background: "rgba(220,38,38,0.05)" }}>
-                        <AlertTriangle size={14} className="text-red-600 flex-shrink-0 hidden sm:block" />
-                        <p className="text-xs text-red-700 leading-relaxed font-medium">
-                          This is irreversible. All your data will be permanently deleted.
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                          Type <span className="font-bold text-red-600 font-mono">DELETE</span> to confirm
-                        </label>
-                        <Input
-                          value={deleteConfirmText}
-                          onChange={e => setDeleteConfirmText(e.target.value)}
-                          placeholder="Type DELETE"
-                          className="font-mono border-red-200 focus:border-red-400 w-full"
-                          data-testid="input-delete-confirm"
-                        />
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button
-                          size="sm"
-                          onClick={deleteAccount}
-                          disabled={deleteConfirmText !== "DELETE"}
-                          className="text-white border-none w-full sm:w-auto"
-                          style={{
-                            background: deleteConfirmText === "DELETE" ? "#dc2626" : "hsl(var(--muted))",
-                            color: deleteConfirmText === "DELETE" ? "#fff" : "hsl(var(--muted-foreground))",
-                          }}
-                          data-testid="button-confirm-delete"
-                        >
-                          <Trash2 size={13} className="mr-1.5" /> Delete My Account
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => { setShowDeleteSection(false); setDeleteConfirmText(""); }} className="w-full sm:w-auto">
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </Row>
-              </Section>
+                  </Row>
+                </Section>
+              </div>
             </>
           )}
+          
 
-          {/* ── SUBSCRIPTION ── */}
           {/* ── SUBSCRIPTION ── */}
           {activeTab === "subscription" && (
             <>
@@ -604,7 +611,7 @@ export default function SettingsPage() {
               </Section>
 
               {/* Change plan */}
-              <Section icon={RefreshCw} title="Upgrade Workspace" subtitle="Subscribe to a premium tier when your trial ends">
+              {/* <Section icon={RefreshCw} title="Upgrade Workspace" subtitle="Subscribe to a premium tier when your trial ends">
                 <Row>
                   <div className="space-y-3">
                     {planCards.map(p => (
@@ -625,7 +632,6 @@ export default function SettingsPage() {
                           <p className="text-xs text-muted-foreground">{p.billed}</p>
                         </div>
                         
-                        {/* Fixed Subscription Buttons Layout */}
                         <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0">
                           <div className="text-left sm:text-right flex-shrink-0 sm:mr-3">
                             <p className="text-sm font-semibold text-foreground">{p.priceLabel}</p>
@@ -644,7 +650,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </Row>
-              </Section>
+              </Section> */}
             </>
           )}
 

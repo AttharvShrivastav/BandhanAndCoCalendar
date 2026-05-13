@@ -8,6 +8,7 @@ export const organizations = mysqlTable("organizations", {
   trialExpires: varchar("trial_expires", { length: 255 }),
   isPaid: boolean("is_paid").default(false).notNull(),
   deletePin: varchar("delete_pin", { length: 10 }).notNull().default("123456"),
+  isDeletePinEnabled: boolean("is_delete_pin_enabled").default(true).notNull(), // NEW
 });
 
 export const users = mysqlTable("users", {
@@ -15,18 +16,15 @@ export const users = mysqlTable("users", {
   orgId: int("org_id").references(() => organizations.id),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
-  password: varchar("password", { length: 255 }).notNull(), // Hashed using bcrypt
+  password: varchar("password", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
-  role: varchar("role", { length: 50 }).default("admin").notNull(), // 'superadmin' | 'admin' | 'viewer'
-
-
+  role: varchar("role", { length: 50 }).default("admin").notNull(),
   fcmToken: varchar("fcm_token", { length: 255 }),
   eventAlertsEnabled: boolean("event_alerts_enabled").default(true).notNull(),
   eventAlertDays: int("event_alert_days").default(3).notNull(),
   platformUpdatesEnabled: boolean("platform_updates_enabled").default(true).notNull(),
 });
 
-// ─── Clients ─────────────────────────────────────────────────────────────────
 export const clients = mysqlTable("clients", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("org_id").notNull().references(() => organizations.id),
@@ -41,7 +39,6 @@ export const clients = mysqlTable("clients", {
   notes: text("notes"),
 });
 
-// ─── Booking Events ───────────────────────────────────────────────────────────
 export const bookingEvents = mysqlTable("booking_events", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("org_id").notNull().references(() => organizations.id),
@@ -58,7 +55,6 @@ export const bookingEvents = mysqlTable("booking_events", {
   category: varchar("category", { length: 100 }).default("wedding"),
 });
 
-// ─── Venues ───────────────────────────────────────────────────────────────────
 export const venues = mysqlTable("venues", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("org_id").notNull().references(() => organizations.id),
@@ -70,7 +66,6 @@ export const venues = mysqlTable("venues", {
   color: varchar("color", { length: 50 }).notNull().default("hsl(210,69%,16%)"),
 });
 
-//------ Support Queries ---------------------------------------------------------
 export const supportQueries = mysqlTable("support_queries", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("org_id").references(() => organizations.id),
@@ -78,28 +73,32 @@ export const supportQueries = mysqlTable("support_queries", {
   email: varchar("email", { length: 255 }).notNull(),
   subject: varchar("subject", { length: 255 }),
   message: text("message").notNull(),
-  status: varchar("status", { length: 50 }).default("open").notNull(), // 'open' | 'resolved'
+  status: varchar("status", { length: 50 }).default("open").notNull(),
   createdAt: varchar("created_at", { length: 100 }).notNull(),
 });
 
-// ── HINDU CALENDAR EVENTS (GLOBAL TABLE) ──
 export const hinduCalendarEvents = mysqlTable("hindu_calendar_events", {
   id: int("id").autoincrement().primaryKey(),
-  date: varchar("date", { length: 50 }).notNull(), // Format: YYYY-MM-DD
+  date: varchar("date", { length: 50 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 100 }).notNull(), // 'muhurat', 'festival', 'inauspicious'
+  type: varchar("type", { length: 100 }).notNull(),
   nakshatra: varchar("nakshatra", { length: 255 }),
   timing: varchar("timing", { length: 255 }),
 });
 
-// ─── Insert Schemas ───────────────────────────────────────────────────────────
+// NEW TABLE
+export const starredDates = mysqlTable("starred_dates", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("org_id").notNull().references(() => organizations.id),
+  date: varchar("date", { length: 50 }).notNull(),
+});
+
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, orgId: true });
 export const insertBookingEventSchema = createInsertSchema(bookingEvents).omit({ id: true, orgId: true });
 export const insertVenueSchema = createInsertSchema(venues).omit({ id: true, orgId: true });
 export const insertSupportQuerySchema = createInsertSchema(supportQueries).omit({ id: true });
 export const insertHinduEventSchema = createInsertSchema(hinduCalendarEvents).omit({ id: true });
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Client = typeof clients.$inferSelect;

@@ -126,6 +126,8 @@ export default function BookingsPage() {
   const { data: authData } = useQuery<{ user: any, organization: any, isImpersonating?: boolean }>({ queryKey: ["/api/auth/me"] });
   const isImpersonating = authData?.isImpersonating;
 
+  const org = authData?.organization;
+
 
 
 
@@ -286,7 +288,15 @@ export default function BookingsPage() {
                   expanded={expanded === client.id}
                   onToggle={() => setExpanded(expanded === client.id ? null : client.id)}
                   onEdit={() => setEditingClient(client)}
-                  onDelete={() => setDeleteDialog({ isOpen: true, clientId: client.id })}
+                  onDelete={() => {
+                    if (org && !org.isDeletePinEnabled) {
+                      if (confirm(`Are you sure you want to delete ${client.clientName}?`)) {
+                        deleteMutation.mutate({ id: client.id, pin: "bypass" });
+                      }
+                    } else {
+                      setDeleteDialog({ isOpen: true, clientId: client.id });
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -675,10 +685,17 @@ function BookingForm({
   function removeEvent(i: number) { setEvents(prev => prev.filter((_, idx) => idx !== i)); }
   function handleRemoveEventClick(i: number, ev: any) {
     if (ev.id) {
-      // It's in the database! Ask for the PIN.
-      setEventDeleteDialog({ isOpen: true, index: i, eventId: ev.id });
+      if (org && !org.isDeletePinEnabled) {
+        if (confirm("Delete this event?")) {
+          setEventDeleteDialog({ isOpen: false, index: i, eventId: ev.id });
+          setEnteredEventPin("bypass");
+          // Trigger the confirm function manually
+          setTimeout(confirmEventDelete, 100); 
+        }
+      } else {
+        setEventDeleteDialog({ isOpen: true, index: i, eventId: ev.id });
+      }
     } else {
-      // It's a new unsaved row. Just remove it from the UI instantly.
       removeEvent(i);
     }
   }
@@ -966,7 +983,13 @@ function BookingForm({
         <ConflictDialog
           conflicts={conflictDialog}
           onCancel={() => setConflictDialog(null)}
-          onProceed={() => { setConflictDialog(null); performSave(); }}
+          onProceed={() => { 
+            setConflictDialog(null); 
+            // We must pass the cleaned phone numbers here just like the normal save!
+            const cp = phone.replace(/\D/g, "").slice(-10);
+            const cap = altPhone.trim() ? altPhone.replace(/\D/g, "").slice(-10) : "";
+            performSave(cp, cap); 
+          }}
         />
       )}
 
