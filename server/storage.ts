@@ -287,6 +287,7 @@
 // export const storage = new SQLiteStorage();
 
 
+import { starredDates } from "@shared/schema";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { eq, and, count, like } from "drizzle-orm";
@@ -309,6 +310,13 @@ const poolConnection = mysql.createPool({
 const db = drizzle(poolConnection);
 
 export interface IStorage {
+
+  // Security
+  updateOrgSecurity(orgId: number, isEnabled: boolean, newPin?: string): Promise<void>;
+  // Starred Dates
+  getStarredDates(orgId: number): Promise<string[]>;
+  toggleStarredDate(orgId: number, date: string): Promise<boolean>;
+
   // Auth & Orgs
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
@@ -522,6 +530,28 @@ export class MySQLStorage implements IStorage {
     await db.update(users)
       .set({ password: hashedPassword })
       .where(eq(users.id, userId));
+  }
+
+  async updateOrgSecurity(orgId: number, isEnabled: boolean, newPin?: string): Promise<void> {
+    const data: any = { isDeletePinEnabled: isEnabled };
+    if (newPin) data.deletePin = newPin;
+    await db.update(organizations).set(data).where(eq(organizations.id, orgId));
+  }
+
+  async getStarredDates(orgId: number): Promise<string[]> {
+    const results = await db.select().from(starredDates).where(eq(starredDates.orgId, orgId));
+    return results.map(r => r.date);
+  }
+
+  async toggleStarredDate(orgId: number, date: string): Promise<boolean> {
+    const existing = await db.select().from(starredDates).where(and(eq(starredDates.orgId, orgId), eq(starredDates.date, date))).limit(1);
+    if (existing.length > 0) {
+      await db.delete(starredDates).where(eq(starredDates.id, existing[0].id));
+      return false; // unstarred
+    } else {
+      await db.insert(starredDates).values({ orgId, date });
+      return true; // starred
+    }
   }
 
   async updateUserProfile(userId: number, profileData: { name: string; email: string; phone?: string }): Promise<void> {

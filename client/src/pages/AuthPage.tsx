@@ -63,6 +63,7 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Phone fields
   const [phone, setPhone] = useState("");
@@ -259,7 +260,7 @@ export default function AuthPage() {
           res = await apiRequest("POST", "/api/auth/register", { name, email, password, phone: phone || undefined });
         } else {
           // FIX 2: Removed 'const' and passed { email, password } instead of 'data'
-          res = await apiRequest("POST", "/api/auth/login", { email, password });
+          res = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe });
         }
 
         const data = await res.json();
@@ -467,6 +468,22 @@ export default function AuthPage() {
                         </button>
                       </div>
                     </div>
+
+                    {/* NEW: Remember Me Checkbox */}
+                    {isLogin && (
+                      <div className="flex items-center gap-2 mt-3 pl-1">
+                        <input 
+                          type="checkbox" 
+                          id="remember" 
+                          checked={rememberMe} 
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-muted-foreground text-[hsl(210,69%,16%)] focus:ring-[hsl(210,69%,16%)]"
+                        />
+                        <label htmlFor="remember" className="text-xs text-muted-foreground cursor-pointer select-none">
+                          Keep me signed in for 30 days
+                        </label>
+                      </div>
+                    )}
 
                     {/* Confirm password — register only */}
                     {!isLogin && (

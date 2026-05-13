@@ -102,7 +102,7 @@ export default function Sidebar() {
       {/* Bottom section */}
       <div className="border-t border-border">
         {/* Collapsible Legend */}
-        <button
+        {/* <button
           onClick={() => setLegendOpen(o => !o)}
           className="w-full flex items-center justify-between px-4 py-2.5 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold hover:bg-muted/40 transition-colors"
         >
@@ -118,7 +118,7 @@ export default function Sidebar() {
               </div>
             ))}
           </div>
-        )}
+        )} */}
 
         {/* ── UNDERCOVER ESCAPE HATCH ── */}
         {isImpersonating && (

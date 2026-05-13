@@ -84,7 +84,7 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
 
   // ─── Authentication Routes ───
   app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Missing email or password" });
 
     const user = await storage.getUserByEmail(email.toLowerCase().trim());
@@ -96,6 +96,13 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     req.session.userId = user.id;
     req.session.orgId = user.orgId!;
     req.session.role = user.role;
+
+    // ── SESSION LOGIC ──
+    if (rememberMe) {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 Days persistence
+    } else {
+      req.session.cookie.expires = false as any; // Browser Session Only
+    }
 
     res.json({ message: "Logged in successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   });
@@ -334,7 +341,7 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     const org = await storage.getOrganization(req.session.orgId!);
     if (!org) return res.status(404).json({ error: "Organization not found" });
 
-    if (org.deletePin !== pin) {
+    if (org.isDeletePinEnabled && org.deletePin !== pin) {
       return res.status(403).json({ error: "Invalid Security PIN. Deletion blocked." });
     }
 
@@ -349,7 +356,6 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     res.json(await storage.getBookingEvents(req.session.orgId!));
   });
 
-  // DOMAIN B2: CONCURRENCY LOCK FOR BOOKINGS
   app.post("/api/booking-events", async (req: Request, res: Response) => {
     const parsed = insertBookingEventSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -360,25 +366,11 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     const orgId = req.session.orgId!;
 
     try {
-      // 1. Fetch all existing events for this tenant
-      const existingEvents = await storage.getBookingEvents(orgId);
+      // 🚨 COLLISION BLOCK REMOVED 🚨
+      // The frontend BookingsPage.tsx handles the UI warning. 
+      // If the request reaches this point, the user explicitly clicked "Proceed Anyway".
+      // We now bypass the strict overlap check and save the data directly.
       
-      // 2. Check for a strict conflict (Same Venue + Same Date)
-      const isConflict = existingEvents.some(
-        (existing) => 
-          existing.venueName === eventData.venueName && 
-          existing.eventDate === eventData.eventDate
-      );
-
-      // 3. Block the transaction if a conflict exists
-      if (isConflict) {
-        return res.status(409).json({ 
-          error: "DOUBLE_BOOKING_PREVENTED", 
-          message: `${eventData.venueName} is already booked on this date.` 
-        });
-      }
-
-      // 4. Save safely if the coast is clear
       const newEvent = await storage.createBookingEvent(orgId, eventData);
       res.status(201).json(newEvent);
     } catch (error) {
@@ -402,7 +394,7 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     const org = await storage.getOrganization(req.session.orgId!);
     if (!org) return res.status(404).json({ error: "Organization not found" });
 
-    if (org.deletePin !== pin) {
+    if (org.isDeletePinEnabled && org.deletePin !== pin) {
       return res.status(403).json({ error: "Invalid Security PIN. Deletion blocked." });
     }
 
@@ -411,6 +403,42 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     res.status(204).send();
   });
 
+
+  // ─── Workspace Security & Starred Dates ───
+  // ─── Workspace Security & Starred Dates ───
+  app.patch("/api/auth/security", requireAuth, async (req: Request, res: Response) => {
+    const { currentPwd, isDeletePinEnabled, newPin, currentPin } = req.body;
+    
+    // 1. Verify user password
+    const user = await storage.getUserById(req.session.userId!);
+    const isValid = await bcrypt.compare(currentPwd, user!.password);
+    if (!isValid) return res.status(401).json({ error: "Incorrect current password" });
+
+    // 2. If they are trying to set a NEW pin, verify the OLD pin first
+    if (newPin) {
+      const org = await storage.getOrganization(req.session.orgId!);
+      if (!currentPin) {
+        return res.status(400).json({ error: "Current PIN is required to set a new PIN" });
+      }
+      if (currentPin !== org!.deletePin) {
+        return res.status(401).json({ error: "Incorrect current PIN" });
+      }
+    }
+
+    // 3. Save updates
+    await storage.updateOrgSecurity(req.session.orgId!, isDeletePinEnabled, newPin);
+    res.json({ success: true });
+  });
+
+  app.get("/api/starred-dates", requireAuth, async (req, res) => {
+    res.json(await storage.getStarredDates(req.session.orgId!));
+  });
+
+  app.post("/api/starred-dates", requireAuth, async (req, res) => {
+    const { date } = req.body;
+    const isStarred = await storage.toggleStarredDate(req.session.orgId!, date);
+    res.json({ isStarred });
+  });
 
   // ─── Venues ───
   app.get("/api/venues", async (req, res) => {

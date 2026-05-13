@@ -83,6 +83,9 @@ export default function VenuesPage() {
   const { data: venues = [], isLoading } = useQuery<Venue[]>({ queryKey: ["/api/venues"] });
   const { data: clients = [] } = useQuery<ClientWithEvents[]>({ queryKey: ["/api/clients"] });
 
+  const { data: authData } = useQuery<{ isImpersonating?: boolean }>({ queryKey: ["/api/auth/me"] });
+  const isImpersonating = authData?.isImpersonating;
+
   // Calculate globally used colors so we can pass them to the picker
   const usedColors = useMemo(() => venues.map(v => v.color).filter(Boolean) as string[], [venues]);
 
@@ -192,7 +195,13 @@ export default function VenuesPage() {
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {confirmed > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-white" style={{ background: STATUS_COLORS.confirmed }}>{confirmed} confirmed</span>}
                           {tentative > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-white" style={{ background: STATUS_COLORS.tentative }}>{tentative} tentative</span>}
-                          <button data-testid={`delete-venue-${venue.id}`} onClick={() => deleteMutation.mutate(venue.id)}
+                          <button data-testid={`delete-venue-${venue.id}`} 
+                            onClick={() => {
+                              if (isImpersonating) {
+                                if (!window.confirm("⚠️ SUPPORT MODE WARNING\n\nYou are about to delete a venue in a client's live workspace. This will affect their calendar.\n\nProceed?")) return;
+                              }
+                              deleteMutation.mutate(venue.id);
+                            }}
                             className="p-1 text-muted-foreground hover:text-destructive transition-colors ml-1">
                             <Trash2 size={14} />
                           </button>
@@ -283,6 +292,10 @@ export default function VenuesPage() {
             </div>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(d => {
+                if (isImpersonating) {
+                  if (!window.confirm("⚠️ SUPPORT MODE WARNING\n\nYou are adding a venue directly to a client's live workspace.\n\nProceed?")) return;
+                }
+
                 if (d.contactPhone) {
                   const cleaned = d.contactPhone.replace(/\D/g, "");
                   const corePhone = cleaned.slice(-10);
