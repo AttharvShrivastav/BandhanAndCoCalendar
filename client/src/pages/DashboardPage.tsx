@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Users, CalendarDays, Building2,
   TrendingUp, Clock,
@@ -50,24 +50,35 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
-  icon: Icon, label, value, sub, accent,
+  icon: Icon, label, value, sub, accent, href, onClick
 }: {
-  icon: React.ElementType; label: string; value: string | number; sub?: string; accent?: string;
+  icon: React.ElementType; label: string; value: string | number; sub?: string; accent?: string; href?: string; onClick?: () => void;
 }) {
+  const [, navigate] = useLocation();
+  
   return (
-    <div className="bg-card border border-border rounded-xl p-4 flex items-start gap-3">
+    <div 
+      onClick={() => {
+        if (onClick) onClick();
+        else if (href) navigate(href);
+      }}
+      className={`bg-card border border-border rounded-xl p-4 flex items-start gap-3 ${(href || onClick) ? 'cursor-pointer hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group' : ''}`}
+    >
       <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+        className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform ${(href || onClick) ? 'group-hover:scale-110 duration-300' : ''}`}
         style={{ background: accent ? `${accent}18` : "hsl(var(--muted))" }}
       >
         <Icon size={16} style={{ color: accent || "hsl(var(--muted-foreground))" }} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">{label}</p>
         <p className="text-xl font-bold text-foreground mt-0.5" style={{ fontFamily: "Playfair Display, serif" }}>{value}</p>
         {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
       </div>
+      {(href || onClick) && <ChevronRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-2" />}
     </div>
   );
 }
@@ -77,6 +88,7 @@ export default function DashboardPage() {
   const [upcomingFilter, setUpcomingFilter] = useState<number>(30); // 30 days default
   const [selectedDate, setSelectedDate] = useState<string | null>(null); // For the Side Panel
   const { toast } = useToast();
+  const [, navigate] = useLocation(); 
 
   const { data: clients = [] } = useQuery<ClientWithEvents[]>({ queryKey: ["/api/clients"] });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["/api/venues"] });
@@ -162,7 +174,15 @@ export default function DashboardPage() {
 
           {/* ── Welcome Banner ── */}
           <div
-            className="rounded-2xl px-6 py-5 flex items-center justify-between gap-4"
+            onClick={() => {
+              if (todayEvents.length > 0) {
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                setSelectedDate(todayStr);
+              } else {
+                navigate("/app");
+              }
+            }}
+            className="rounded-2xl px-6 py-5 flex items-center justify-between gap-4 cursor-pointer hover:shadow-lg hover:scale-[1.01] transition-all duration-300 group"
             style={{
               background: "linear-gradient(120deg, hsl(210,69%,16%) 0%, hsl(210,55%,24%) 100%)",
             }}
@@ -191,24 +211,24 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Stat Cards ── */}
-          {/* <div className="grid grid-cols-3 gap-3">
-           */}
-           {/* ── Stat Cards ── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <StatCard
               icon={Users} label="Total Clients" value={clients.length}
               sub={`${stats.confirmed} confirmed · ${stats.tentative} tentative`}
               accent="hsl(210,69%,16%)"
+              onClick={() => document.getElementById("clients-section")?.scrollIntoView({ behavior: "smooth" })}
             />
             <StatCard
               icon={CalendarDays} label="Total Events" value={stats.totalEvents}
               sub={`${upcoming.length} in next 30 days`}
               accent="hsl(38,49%,57%)"
+              href="/app"
             />
             <StatCard
               icon={Building2} label="Venues" value={venues.length}
               sub="active venues"
               accent="#6b3a7d"
+              href="/app/venues"
             />
           </div>
 
@@ -233,7 +253,7 @@ export default function DashboardPage() {
                     <option value={365}>Next 1 Year</option>
                   </select>
                 </div>
-                <Link href="/app/calendar">
+                <Link href="/app">
                   <a className="flex items-center gap-1 text-[11px] font-medium" style={{ color: "hsl(38,49%,57%)" }}>
                     Calendar <ArrowRight size={11} />
                   </a>
@@ -332,17 +352,20 @@ export default function DashboardPage() {
                 </div>
                 <div className="divide-y divide-border">
                   {venues.slice(0, 4).map(v => (
-                    <div key={v.id} className="px-5 py-2.5 flex items-start gap-2">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
-                        style={{ background: "hsl(210,69%,16%,0.08)" }}>
-                        <Building2 size={11} style={{ color: "hsl(210,69%,16%)" }} />
+                    <div key={v.id} onClick={() => navigate(`/app/venues/${v.id}/calendar`)} className="px-5 py-2.5 flex items-start justify-between gap-2 cursor-pointer hover:bg-muted/50 transition-colors group">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform"
+                          style={{ background: "hsl(210,69%,16%,0.08)" }}>
+                          <Building2 size={11} style={{ color: "hsl(210,69%,16%)" }} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">{v.name}</p>
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
+                            <MapPin size={9} /> {v.location}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">{v.name}</p>
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
-                          <MapPin size={9} /> {v.location}
-                        </p>
-                      </div>
+                      <ChevronRight size={13} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0" />
                     </div>
                   ))}
                 </div>
@@ -351,7 +374,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Clients list ── */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div id="clients-section" className="bg-card border border-border rounded-xl overflow-hidden scroll-mt-6">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users size={14} style={{ color: "hsl(210,69%,16%)" }} />
@@ -363,28 +386,31 @@ export default function DashboardPage() {
             </div>
             <div className="divide-y divide-border">
               {recentClients.map(c => (
-                <div key={c.id} className="px-5 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold"
+                <div key={c.id} onClick={() => navigate("/app/bookings")} className="px-5 py-3 flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors group">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold group-hover:scale-110 transition-transform"
                     style={{ background: "hsl(210,69%,16%)" }}>
                     {c.clientName.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{c.clientName}</p>
+                    <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">{c.clientName}</p>
                     <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
                       <Phone size={9} /> {c.contactPhone}
                       <span className="mx-1">·</span>
                       {c.events.length} event{c.events.length !== 1 ? "s" : ""}
                     </p>
                   </div>
-                  <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 capitalize"
-                    style={{
-                      background: `${STATUS_DOT[c.overallStatus] || "#ccc"}18`,
-                      color: STATUS_DOT[c.overallStatus] || "#888",
-                    }}
-                  >
-                    {c.overallStatus}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 capitalize"
+                      style={{
+                        background: `${STATUS_DOT[c.overallStatus] || "#ccc"}18`,
+                        color: STATUS_DOT[c.overallStatus] || "#888",
+                      }}
+                    >
+                      {c.overallStatus}
+                    </span>
+                    <ChevronRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
               ))}
             </div>

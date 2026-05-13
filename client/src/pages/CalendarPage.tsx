@@ -1932,7 +1932,7 @@ export default function CalendarPage() {
   // ── Filters ──
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterEventType, setFilterEventType] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"calendar" | "table" | "list">("calendar");
+  const [viewMode, setViewMode] = useState<"calendar" | "table" | "list">("table");
 
   const { data: clients = [] } = useQuery<ClientWithEvents[]>({ queryKey: ["/api/clients"] });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["/api/venues"] });
