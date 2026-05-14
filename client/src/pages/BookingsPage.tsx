@@ -156,19 +156,93 @@ export default function BookingsPage() {
   });
 
   // ── Filter ──
+  // ── Filter ──
   const filtered = useMemo(() => {
+    // 1. Clean the input: trim edges and compress double spaces to handle messy typing
+    const q = search.toLowerCase().trim().replace(/\s+/g, ' '); 
+    
+    // 2. Setup Natural Language baselines (Local Timezone Safe)
+    const getLocalIso = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    const today = new Date();
+    const todayIso = getLocalIso(today);
+    
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    const tomorrowIso = getLocalIso(tomorrow);
+    
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const yesterdayIso = getLocalIso(yesterday);
+
     return clients.filter(c => {
-      const q = search.toLowerCase();
-      const matchSearch = !q ||
+      // Base Status & Category Checks
+      const matchStatus = filterStatus === "all" || c.overallStatus === filterStatus;
+      const matchCategory = filterCategory === "all" || c.events.some(e => (e.category || "wedding") === filterCategory);
+
+      // If search is empty, just return the filters
+      if (!q) return matchStatus && matchCategory;
+
+      // 3. Text Fields Check
+      const matchText =
         c.clientName.toLowerCase().includes(q) ||
         (c.brideName || "").toLowerCase().includes(q) ||
         (c.groomName || "").toLowerCase().includes(q) ||
         c.contactPhone.includes(q) ||
-        c.contactEmail.toLowerCase().includes(q) ||
-        c.events.some(e => e.venueName.toLowerCase().includes(q) || (()=>{ try{const p=JSON.parse(e.venueName);return Array.isArray(p)&&p.some((v:string)=>v.toLowerCase().includes(q));}catch{return false;}})());
-      const matchStatus = filterStatus === "all" || c.overallStatus === filterStatus;
-      const matchCategory = filterCategory === "all" || c.events.some(e => (e.category || "wedding") === filterCategory);
-      return matchSearch && matchStatus && matchCategory;
+        c.contactEmail.toLowerCase().includes(q);
+
+      let matchVenue = false;
+      let matchDate = false;
+
+      for (const e of c.events) {
+        // 4. Venue Check
+        try {
+          const p = JSON.parse(e.venueName);
+          if (Array.isArray(p) && p.some((v: string) => v.toLowerCase().includes(q))) matchVenue = true;
+        } catch {
+          if (e.venueName.toLowerCase().includes(q)) matchVenue = true;
+        }
+
+        // 5. Omni-Format Date Check
+        if (e.eventDate) {
+          const [y, m, d] = e.eventDate.split('-');
+          const sy = y.slice(2); // Short year: 26
+          const sm = parseInt(m, 10).toString(); // Short month: 5
+          const sd = parseInt(d, 10).toString(); // Short day: 14
+
+          const dateObj = new Date(e.eventDate + "T12:00:00");
+          const monthLong = dateObj.toLocaleDateString('en-US', { month: 'long' }).toLowerCase(); // may
+          const monthShort = dateObj.toLocaleDateString('en-US', { month: 'short' }).toLowerCase(); // may
+
+          // Generate every conceivable format combination!
+          const tags = [
+            e.eventDate, y, m, d, sm, sd,
+            `${d}/${m}/${y}`, `${sd}/${sm}/${y}`, `${d}/${m}/${sy}`, `${sd}/${sm}/${sy}`, // UK/IN Slash
+            `${m}/${d}/${y}`, `${sm}/${sd}/${y}`, `${m}/${d}/${sy}`, `${sm}/${sd}/${sy}`, // US Slash
+            `${d}-${m}-${y}`, `${sd}-${sm}-${y}`, `${d}-${m}-${sy}`, `${sd}-${sm}-${sy}`, // Dash
+            `${d}.${m}.${y}`, `${sd}.${sm}.${y}`, `${d}.${m}.${sy}`, `${sd}.${sm}.${sy}`, // Dots
+            `${d} ${m} ${y}`, `${sd} ${sm} ${y}`, `${d} ${m} ${sy}`, `${sd} ${sm} ${sy}`, // Spaces
+            `${d}/${m}`, `${sd}/${sm}`, `${sm}/${sd}`, `${m}/${d}`, // Partial day/month
+            `${monthLong} ${sd}`, `${sd} ${monthLong}`, `${monthLong} ${d}`, // "may 14", "14 may"
+            `${monthShort} ${sd}`, `${sd} ${monthShort}`, `${monthShort} ${d}`, // "may 14"
+            `${monthLong} ${y}`, `${monthShort} ${y}`, // "may 2026"
+            `${m}/${y}`, `${sm}/${y}`, `${sm}/${sy}`, // "05/2026", "5/26"
+            e.eventDate === todayIso ? "today" : "",
+            e.eventDate === tomorrowIso ? "tomorrow" : "",
+            e.eventDate === yesterdayIso ? "yesterday" : ""
+          ];
+
+          // If the typed query exists inside ANY of those tags, it's a perfect match
+          if (tags.some(tag => tag && tag.includes(q))) {
+            matchDate = true;
+          }
+        }
+      }
+
+      return (matchText || matchVenue || matchDate) && matchStatus && matchCategory;
     });
   }, [clients, search, filterStatus, filterCategory]);
 
@@ -209,6 +283,7 @@ export default function BookingsPage() {
       </header>
 
       {/* Filters */}
+      {/* Filters */}
       <div className="px-6 py-3 border-b border-border bg-card space-y-2">
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-xs">
@@ -216,9 +291,17 @@ export default function BookingsPage() {
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search clients, venue, phone…"
-              className="pl-8 h-8 text-sm"
+              placeholder="Search clients, dates, venues…"
+              className="pl-8 pr-8 h-8 text-sm"
             />
+            {search && (
+              <button 
+                onClick={() => setSearch("")} 
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
           {/* Status filter */}
           <div className="flex gap-1">

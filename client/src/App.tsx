@@ -117,8 +117,15 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
       const org = payload.organization;
       
       if (!isSuperAdmin && org && !org.isPaid && org.trialExpires) {
-        const expires = new Date(org.trialExpires).getTime();
-        if (Date.now() > expires) {
+        // Force local timezone extraction to prevent premature UTC lockouts
+        const today = new Date();
+        const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        
+        const exp = new Date(org.trialExpires);
+        const localExp = `${exp.getFullYear()}-${String(exp.getMonth() + 1).padStart(2, "0")}-${String(exp.getDate()).padStart(2, "0")}`;
+
+        // String comparison perfectly evaluates YYYY-MM-DD dates
+        if (localToday > localExp) {
           navigate("/expired");
           throw new Error("EXPIRED");
         }

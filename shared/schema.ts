@@ -25,6 +25,12 @@ export const users = mysqlTable("users", {
   platformUpdatesEnabled: boolean("platform_updates_enabled").default(true).notNull(),
 });
 
+export const tutorials = mysqlTable("tutorials", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  videoUrl: varchar("video_url", { length: 500 }).notNull(),
+});
+
 export const clients = mysqlTable("clients", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("org_id").notNull().references(() => organizations.id),

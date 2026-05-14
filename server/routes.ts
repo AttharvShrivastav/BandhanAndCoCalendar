@@ -315,6 +315,33 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     }
   });
 
+  // DOMAIN A3: DELETE WORKSPACE (DANGER ZONE)
+  app.delete("/api/auth/account", requireAuth, async (req: Request, res: Response) => {
+    if (req.session.role === "superadmin") {
+      return res.status(403).json({ error: "SuperAdmins cannot delete the master account." });
+    }
+
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: "Password is required to authorize deletion." });
+
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      const isValid = await bcrypt.compare(password, user!.password);
+      if (!isValid) return res.status(401).json({ error: "Incorrect password. Deletion aborted." });
+
+      await storage.deleteOrganization(req.session.orgId!);
+
+      // Shred the session and log them out
+      req.session.destroy(() => {
+        res.clearCookie("connect.sid");
+        res.json({ success: true, message: "Workspace permanently deleted." });
+      });
+    } catch (error) {
+      console.error("Workspace Deletion Error:", error);
+      res.status(500).json({ error: "Failed to delete workspace." });
+    }
+  });
+
 
   // ─── Protected Data Routes (The Vault) ───
   app.use("/api/clients", requireAuth, checkSubscription);
@@ -556,7 +583,30 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     await storage.bulkInsertHinduEvents(validEvents);
     res.json({ message: `Successfully synced ${validEvents.length} calendar events.` });
   });
+ 
+  // ─── Tutorials (Global) ───
+  // Any logged-in user can fetch the videos
+  app.get("/api/tutorials", requireAuth, async (req, res) => {
+    const tuts = await storage.getTutorials();
+    res.json(tuts);
+  });
+
+  // ONLY SuperAdmins can add videos
+  app.post("/api/tutorials", requireAuth, async (req, res) => {
+    if (req.session.role !== "superadmin") return res.status(403).json({ error: "Forbidden" });
+    const { title, videoUrl } = req.body;
+    await storage.createTutorial(title, videoUrl);
+    res.json({ success: true });
+  });
+
+  // ONLY SuperAdmins can delete videos
+  app.delete("/api/tutorials/:id", requireAuth, async (req, res) => {
+    if (req.session.role !== "superadmin") return res.status(403).json({ error: "Forbidden" });
+    await storage.deleteTutorial(Number(req.params.id));
+    res.json({ success: true });
+  });
 }
+
 
 // import type { Express, Request, Response, NextFunction } from "express";
 // import { createServer } from "http";

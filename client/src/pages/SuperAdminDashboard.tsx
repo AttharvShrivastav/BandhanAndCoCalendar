@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { 
   ShieldAlert, Building2, User, Mail, Lock, Calendar, 
   LogOut, Phone, Inbox, LayoutGrid, CheckCircle2, AlertCircle,
-  CalendarDays, FileJson, Key
+  CalendarDays, FileJson, Key, PlaySquare, Plus, Trash2
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -15,7 +15,7 @@ export default function SuperAdminDashboard() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"provision" | "directory" | "inbox" | "panchang" | "account">("provision");
+const [activeTab, setActiveTab] = useState<"provision" | "directory" | "inbox" | "panchang" | "tutorials" | "account">("provision");
   
   const [saName, setSaName] = useState("");
   const [saEmail, setSaEmail] = useState("");
@@ -46,10 +46,16 @@ export default function SuperAdminDashboard() {
   const [deletePin, setDeletePin] = useState(""); 
   const [extendDays, setExtendDays] = useState<Record<number, string>>({});
   const [queryFilter, setQueryFilter] = useState<"open" | "resolved" | "all">("open");
+  
   const [jsonInput, setJsonInput] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [resetModal, setResetModal] = useState<{orgName: string, password: string} | null>(null);
   
+  // ── Tutorial State ──
+  const [tutTitle, setTutTitle] = useState("");
+  const [tutUrl, setTutUrl] = useState("");
+  const { data: tutorials = [] } = useQuery<any[]>({ queryKey: ["/api/tutorials"] });
+
   // ── Fetch SuperAdmin Data ──
   const { data: statsData } = useQuery<{ orgs: any[], totalBookings: number }>({ queryKey: ["/api/superadmin/stats"] });
   const { data: queriesData } = useQuery<any[]>({ queryKey: ["/api/superadmin/queries"] });
@@ -172,7 +178,9 @@ export default function SuperAdminDashboard() {
           { key: "directory" as const, label: "Tenant Directory", icon: LayoutGrid },
           { key: "inbox" as const, label: "Support Inbox", icon: Inbox },
           { key: "panchang" as const, label: "Panchang Data", icon: CalendarDays },
-          { key: "account" as const, label: "My Account", icon: User }, // <-- ADD THIS
+          { key: "tutorials" as const, label: "Tutorials", icon: PlaySquare },
+          { key: "account" as const, label: "My Account", icon: User }, 
+          // <-- ADD THIS
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -324,7 +332,10 @@ export default function SuperAdminDashboard() {
                       const [year, month, day] = dateStringRaw.split('-').map(Number);
                       const exactDate = new Date(year, month - 1, day);
                       displayDate = exactDate.toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' });
-                      isExpired = exactDate.getTime() < Date.now() && !org.isPaid;
+                      
+                      const today = new Date();
+                      const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                      isExpired = dateStringRaw < localToday && !org.isPaid;
                     }
                     
                     return (
@@ -660,6 +671,98 @@ export default function SuperAdminDashboard() {
                 >
                   {isSyncing ? "Syncing..." : "Sync Calendar to Database"}
                 </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4.5: GLOBAL TUTORIALS */}
+        {activeTab === "tutorials" && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 md:px-5 py-4 border-b border-border bg-muted/30">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <PlaySquare size={16} className="text-muted-foreground" />
+                  Manage Global Tutorials
+                </h3>
+                <p className="text-[10px] md:text-xs text-muted-foreground mt-1 ml-0 md:ml-6">
+                  Add YouTube links here. These videos will appear in the Settings page for all tenant workspaces.
+                </p>
+              </div>
+
+              <div className="p-4 md:p-6 space-y-6">
+                {/* Upload Form */}
+                <div className="flex flex-col md:flex-row gap-3">
+                  <Input 
+                    className="flex-1" 
+                    placeholder="Video Title (e.g., How to add a venue)" 
+                    value={tutTitle} 
+                    onChange={e => setTutTitle(e.target.value)} 
+                  />
+                  <Input 
+                    className="flex-1" 
+                    placeholder="YouTube URL" 
+                    value={tutUrl} 
+                    onChange={e => setTutUrl(e.target.value)} 
+                  />
+                  <Button 
+                    onClick={async () => {
+                      if (!tutTitle || !tutUrl) {
+                        toast({ title: "Fill all fields", variant: "destructive" });
+                        return;
+                      }
+                      try {
+                        await apiRequest("POST", "/api/tutorials", { title: tutTitle, videoUrl: tutUrl });
+                        queryClient.invalidateQueries({ queryKey: ["/api/tutorials"] });
+                        setTutTitle(""); setTutUrl("");
+                        toast({ title: "Tutorial Added!" });
+                      } catch (err: any) {
+                        toast({ title: "Error", description: err.message, variant: "destructive" });
+                      }
+                    }} 
+                    className="w-full md:w-auto"
+                    style={{ background: "hsl(210,69%,16%)", color: "white" }}
+                  >
+                    <Plus size={16} className="mr-1" /> Add Video
+                  </Button>
+                </div>
+
+                {/* List of Videos */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Current Videos</h4>
+                  {tutorials.map(tut => (
+                    <div key={tut.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/10">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm font-semibold text-foreground truncate">{tut.title}</p>
+                        <a href={tut.videoUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block">
+                          {tut.videoUrl}
+                        </a>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                        onClick={async () => {
+                          if (!confirm("Delete this tutorial for all users?")) return;
+                          try {
+                            await apiRequest("DELETE", `/api/tutorials/${tut.id}`);
+                            queryClient.invalidateQueries({ queryKey: ["/api/tutorials"] });
+                            toast({ title: "Tutorial Deleted" });
+                          } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  ))}
+                  {tutorials.length === 0 && (
+                    <div className="text-center py-8 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                      No tutorials uploaded yet.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
