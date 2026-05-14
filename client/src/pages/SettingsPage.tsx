@@ -9,8 +9,9 @@ import {
   ChevronDown, ChevronUp, MapPin, Clock, Send, ExternalLink,
   CreditCard, Sparkles, Crown, Zap, Check, Calendar,
   RefreshCw, XCircle, ArrowUpRight, Receipt, BadgeCheck, ShieldAlert,
-  Headphones, FlaskConical, Building2
+  Headphones, FlaskConical, Building2, PlaySquare
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -68,13 +69,18 @@ function Row({ children, danger }: { children: React.ReactNode; danger?: boolean
 export default function SettingsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const queryClient = useQueryClient(); // 🔥 ADDED: Cache Controller
+  const queryClient = useQueryClient();
 
-  // ── Fetch Real Data ──
   const { data: authData } = useQuery<{ user: any; organization: any; isImpersonating?: boolean }>({ queryKey: ["/api/auth/me"] });
   const user = authData?.user;
   const org = authData?.organization;
   const isImpersonating = authData?.isImpersonating;  
+  const { data: tutorials = [] } = useQuery<any[]>({ queryKey: ["/api/tutorials"] });
+
+  function getYTId(url: string) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/))([^&?\s]+)/);
+    return match ? match[1] : null;
+  }
 
   // ── Manage Account state ──
   const [name, setName] = useState("");
@@ -101,7 +107,6 @@ export default function SettingsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   // Security Settings State
-  // Security Settings State
   const [isDeletePinEnabled, setIsDeletePinEnabled] = useState(true);
   const [currentDeletePin, setCurrentDeletePin] = useState(""); // <-- ADD THIS
   const [newDeletePin, setNewDeletePin] = useState("");
@@ -117,7 +122,12 @@ export default function SettingsPage() {
   const [eventAlertDays, setEventAlertDays] = useState<number>(3);
   const [platformUpdatesEnabled, setPlatformUpdatesEnabled] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<"account" | "notifications" | "subscription" | "faq" | "contact">("account");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"account" | "notifications" | "subscription" | "faq" | "contact" | "tutorials">("account"); 
 
   // ── Subscription state ──
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -207,6 +217,20 @@ export default function SettingsPage() {
       a: "Bandhan & Co. provides a robust trial period for new workspaces. Pricing details and permanent plans can be managed directly through the platform.",
     },
   ];
+
+
+  async function handleDeleteAccount() {
+    if (!deletePassword) return toast({ title: "Password required", variant: "destructive" });
+    setIsDeleting(true);
+    try {
+      await apiRequest("DELETE", "/api/auth/account", { password: deletePassword });
+      queryClient.clear();
+      window.location.href = "/"; // Force a hard reload to clear all React state and route to landing
+    } catch (err: any) {
+      toast({ title: "Deletion Failed", description: err.message, variant: "destructive" });
+      setIsDeleting(false);
+    }
+  }
 
   async function submitContact() {
     if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) {
@@ -334,6 +358,7 @@ export default function SettingsPage() {
     { key: "subscription" as const, label: "Subscription", icon: CreditCard },
     { key: "faq" as const, label: "FAQs", icon: HelpCircle },
     { key: "contact" as const, label: "Contact Us", icon: MessageSquare },
+    { key: "tutorials" as const, label: "Tutorials", icon: PlaySquare },
   ];
 
   return (
@@ -453,15 +478,35 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           </div>
-                          <Button size="sm" onClick={changePassword} className="w-full md:w-auto" style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
-                            <Shield size={13} className="mr-1.5" /> Update Password
-                          </Button>
-                        </div>
-                      </Row>
-                    </Section>
-                  </div>
-                </>
+                          <Button size="sm" onClick={updateSecuritySettings} className="w-full md:w-auto" style={{ background: "hsl(210,69%,16%)", color: "#fff" }}>
+                          <Save size={13} className="mr-1.5" /> Save Security Settings
+                        </Button>
+                      </div>
+
+                  </Row>
+                </Section>
+              </div>
+
+              {!isImpersonating && (
+                <div className="mt-8 pt-6 border-t border-destructive/20">
+                  <Section icon={AlertTriangle} title="Danger Zone" subtitle="Permanently delete your account and all data">
+                    <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-sm font-semibold text-destructive">Delete Workspace</h4>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-md leading-relaxed">
+                          Once you delete your workspace, there is no going back. All clients, events, and venues will be permanently erased.
+                        </p>
+                      </div>
+                      <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} className="w-full md:w-auto flex-shrink-0">
+                        Delete Account
+                      </Button>
+                    </div>
+                  </Section>
+                </div>
               )}
+
+            </>
+          )}
 
               {/* ── WORKSPACE SECURITY (Accessible to Impersonator) ── */}
               <div className="mt-5">
@@ -711,7 +756,6 @@ export default function SettingsPage() {
             </>
           )}
 
-          {/* ── CONTACT US ── */}
           {/* ── CONTACT US ── */}
           {activeTab === "contact" && (
             <>
@@ -977,8 +1021,111 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+
+          {/* ── TUTORIALS (Read-Only for Org Users) ── */}
+          {activeTab === "tutorials" && (
+            <div className="space-y-5">
+              <Section icon={PlaySquare} title="Platform Tutorials" subtitle="Learn how to get the most out of Bandhan & Co.">
+                {tutorials.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground bg-muted/20 rounded-xl border border-border">
+                    <p className="text-sm">No tutorials available right now. Check back later!</p>
+                  </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-6 mt-4 max-w-4xl mx-auto">
+                    {tutorials.map(tut => {
+                      const ytId = getYTId(tut.videoUrl);
+                      return (
+                          <div key={tut.id} className="bg-card border border-border rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow">
+                          {/* Inner wrapper for the video to give it rounded corners inside the padded card */}
+                          <div className="rounded-lg overflow-hidden border border-border/50 bg-muted mb-3">
+                            {ytId ? (
+                              <iframe 
+                                className="w-full aspect-video" 
+                                src={`https://www.youtube.com/embed/${ytId}?rel=0`} 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowFullScreen 
+                              />
+                            ) : (
+                              <div className="w-full aspect-video flex items-center justify-center text-xs text-muted-foreground">Invalid Link</div>
+                            )}
+                          </div>
+                          {/* Title area with a little breathing room */}
+                          <div className="px-1 pb-1">
+                            <p className="text-sm font-semibold text-foreground leading-tight">{tut.title}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Section>
+            </div>
+          )}
+          
         </div>
       </div>
+    {showDeleteDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-destructive rounded-xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-destructive" />
+              </div>
+              <h3 className="text-lg font-bold text-destructive" style={{ fontFamily: "Playfair Display, serif" }}>
+                Final Confirmation
+              </h3>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              This action is irreversible. To authorize the permanent deletion of your workspace, please type <strong>DELETE</strong> and enter your account password.
+            </p>
+
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1.5">Type DELETE to confirm</label>
+                <Input 
+                  type="text"
+                  placeholder="DELETE"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1.5">Account Password</label>
+                <Input 
+                  type="password"
+                  placeholder="Enter your password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => { 
+                  setShowDeleteDialog(false); 
+                  setDeletePassword(""); 
+                  setDeleteConfirmation(""); 
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmation !== "DELETE" || !deletePassword || isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Permanently Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── END DIALOG ── */}
+
     </div>
   );
 }

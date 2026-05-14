@@ -295,8 +295,10 @@ import {
   organizations, users, clients, bookingEvents, venues, supportQueries, hinduCalendarEvents,
   type Organization, type User, type Client, type InsertClient,
   type BookingEvent, type InsertBookingEvent,
-  type Venue, type InsertVenue, type ClientWithEvents,
+  type Venue, type InsertVenue, type ClientWithEvents, tutorials
 } from "@shared/schema";
+
+
 
 // ─── Remote MySQL Connection ───
 if (!process.env.DATABASE_URL) {
@@ -321,6 +323,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
   createOrganization(name: string, trialExpires: string, deletePin: string): Promise<Organization>;
+  deleteOrganization(orgId: number): Promise<boolean>;
   createUser(user: Omit<User, "id">): Promise<User>;
   getOrganization(id: number): Promise<Organization | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
@@ -359,6 +362,12 @@ export interface IStorage {
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
   updateUserProfile(userId: number, profileData: { name: string; email: string; phone?: string }): Promise<void>;
   getAdminUserByOrgId(orgId: number): Promise<User | undefined>; 
+
+  // Tutorials
+  getTutorials(): Promise<any[]>;
+  createTutorial(title: string, videoUrl: string): Promise<void>;
+  deleteTutorial(id: number): Promise<boolean>;
+
 
   // Hindu Calendar
   getHinduEvents(year?: string): Promise<any[]>;
@@ -564,6 +573,20 @@ export class MySQLStorage implements IStorage {
       .where(eq(users.id, userId));
   }
 
+  // ─── Tutorials (Global) ───
+  async getTutorials(): Promise<any[]> {
+    return await db.select().from(tutorials);
+  }
+
+  async createTutorial(title: string, videoUrl: string): Promise<void> {
+    await db.insert(tutorials).values({ title, videoUrl });
+  }
+
+  async deleteTutorial(id: number): Promise<boolean> {
+    const [result] = await db.delete(tutorials).where(eq(tutorials.id, id));
+    return result.affectedRows > 0;
+  }
+
   // ─── Hindu Calendar ───
   async getHinduEvents(year?: string): Promise<any[]> {
     if (year) {
@@ -576,6 +599,22 @@ export class MySQLStorage implements IStorage {
     if (events.length > 0) {
       await db.insert(hinduCalendarEvents).values(events);
     }
+  }
+
+
+  // ─── Workspace Teardown ───
+  async deleteOrganization(orgId: number): Promise<boolean> {
+    // Manually cascade deletes to prevent MySQL constraint errors
+    await db.delete(bookingEvents).where(eq(bookingEvents.orgId, orgId));
+    await db.delete(clients).where(eq(clients.orgId, orgId));
+    await db.delete(venues).where(eq(venues.orgId, orgId));
+    await db.delete(supportQueries).where(eq(supportQueries.orgId, orgId));
+    await db.delete(starredDates).where(eq(starredDates.orgId, orgId));
+    await db.delete(users).where(eq(users.orgId, orgId));
+    
+    // Finally, drop the organization
+    const [result] = await db.delete(organizations).where(eq(organizations.id, orgId));
+    return result.affectedRows > 0;
   }
 }
 
