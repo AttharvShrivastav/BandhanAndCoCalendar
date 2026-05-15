@@ -11,6 +11,13 @@ import {
 import session from "express-session";
 import connectSqlite3 from "connect-sqlite3";
 import bcrypt from "bcryptjs";
+import admin from "./firebaseAdmin.js";
+
+
+
+
+
+
 
 const SQLiteStore = connectSqlite3(session);
 
@@ -22,6 +29,54 @@ declare module "express-session" {
     role: string;
     originalOrgId?: number;
   }
+}
+
+
+
+
+import cron from "node-cron";
+import sendPushNotification from "./sendNotification";
+
+if (global.__event_cron_started) {
+  console.log("CRON already running, skipping duplicate init");
+} else {
+  global.__event_cron_started = true;
+
+  cron.schedule("25 17 * * *", async () => {
+    console.log("Running daily event reminder job");
+
+    try {
+      const users = await storage.getAllUsers();
+
+      const sentMap = new Set();
+
+      for (const user of users) {
+        if (!user.fcmToken || user.fcmToken.trim() === "") continue;
+
+        let events = await storage.getUpcomingBookingEvents(user.orgId);
+
+        if (!events.length) continue;
+
+        for (const event of events) {
+          const key = `${user.orgId}-${event.id}`;
+
+          if (sentMap.has(key)) continue;
+          sentMap.add(key);
+
+          console.log("Sending:", user.name, event.eventType);
+
+          await sendPushNotification({
+            token: user.fcmToken,
+            eventType: event.eventType,
+            eventDate: event.eventDate,
+            venueName: event.venueName,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Cron error:", err);
+    }
+  });
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -83,36 +138,124 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
   }));
 
   // ─── Authentication Routes ───
-  app.post("/api/auth/login", async (req, res) => {
-    const { email, password, rememberMe } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Missing email or password" });
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password, rememberMe, fcm_token } = req.body;
 
-    const user = await storage.getUserByEmail(email.toLowerCase().trim());
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    console.log(fcm_token);
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Missing email or password",
+      });
+    }
 
+    const user = await storage.getUserByEmail(
+      email.toLowerCase().trim()
+    );
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Invalid credentials",
+      });
+    }
+
+    if (
+      fcm_token !== null &&
+      fcm_token !== undefined &&
+      typeof fcm_token !== "string"
+    ) {
+      return res.status(400).json({
+        error: "Invalid token",
+      });
+    }
+
+    const isValid = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!isValid) {
+      return res.status(401).json({
+        error: "Invalid credentials",
+      });
+    }
+
+    // Update FCM token
+    if (fcm_token) {
+      await storage.updateUserFcmToken(
+        user.id!,
+        fcm_token
+      );
+    }
+
+    // Save session
     req.session.userId = user.id;
     req.session.orgId = user.orgId!;
     req.session.role = user.role;
 
-    // ── SESSION LOGIC ──
+    // Remember me
     if (rememberMe) {
-      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 Days persistence
+      req.session.cookie.maxAge =
+        30 * 24 * 60 * 60 * 1000;
     } else {
-      req.session.cookie.expires = false as any; // Browser Session Only
+      req.session.cookie.expires = false as any;
     }
 
-    res.json({ message: "Logged in successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    return res.json({
+      message: "Logged in successfully",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
+
+
+// ─── Push Notifications (FCM) ───
+  app.patch("/api/auth/fcm-token", requireAuth, async (req: Request, res: Response) => {
+    const { token } = req.body;
+    if (token !== null && typeof token !== "string") return res.status(400).json({ error: "Invalid token" });
+
+    try {
+      await storage.updateUserFcmToken(req.session.userId!, token);
+      res.json({ success: true, message: "Push notification token synced." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync device token." });
+    }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+
+
+
+
+ app.post("/api/auth/logout", async (req, res) => {
+    // ── ADD THIS: Clear the token so notifications stop hitting this device ──
+    if (req.session?.userId) {
+      await storage.updateUserFcmToken(req.session.userId, null);
+    }
+    
     req.session.destroy(() => {
-      res.clearCookie("connect.sid"); // Ensure the browser drops the cookie
+      res.clearCookie("connect.sid");
       res.json({ success: true, message: "Logged out" });
     });
   });
+
+
+
+
+
 
   app.post("/api/auth/send-otp", async (req, res) => {
     const { phone } = req.body;

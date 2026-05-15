@@ -1,14 +1,26 @@
+
 import express, { type Request, Response, NextFunction } from "express";
+import "./cron";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import cors from "cors"; // <-- ADD THIS IMPORT
 import "dotenv/config";
-
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
 const app = express();
 const httpServer = createServer(app);
+
+
+app.get("/firebase-messaging-sw.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.sendFile(path.join(__dirname, "firebase-messaging-sw.js"));
+});
+
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:5001", // Your frontend URL goes here

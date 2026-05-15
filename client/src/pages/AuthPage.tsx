@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   Mail, Lock, Phone, Eye, EyeOff, ChevronRight,
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
+import { messaging } from "../firebase";
+import { getToken, onMessage } from "firebase/messaging";
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Mode = "login" | "register";
 type Method = "email" | "phone";
@@ -50,6 +52,104 @@ function BgDecor() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function AuthPage() {
+
+
+const [fcm_token, setFcmToken] = useState<string | undefined>(undefined);
+  
+  useEffect(() => {
+    requestPermission();
+    listenMessages();
+  }, []);
+
+
+
+ const requestPermission = async () => {
+  try {
+
+    console.log("Requesting notification permission...");
+
+    // Check current permission state
+    if (Notification.permission === "granted") {
+
+      console.log("Already granted");
+
+      const token = await getToken(messaging, {
+        vapidKey: "BNVlHkambYsC5jsrLa0Zr-0OS05DJtxLkourbnIqtTdDDlYc-2Rt3yWEVVPgMc9pJ9vK8QnnZiPm_WwNcd6ApYQ",
+      });
+
+      setFcmToken(token);
+     // console.log("FCM Token:", token);
+
+      return token;
+    }
+
+    // If blocked previously
+    if (Notification.permission === "denied") {
+
+      console.log("Notification permission blocked");
+
+      alert(
+        "Notifications are blocked. Please enable them manually in browser settings."
+      );
+
+      return null;
+    }
+
+    // Ask permission first time
+    const permission = await Notification.requestPermission();
+
+    if (permission === "granted") {
+
+      console.log("Permission granted");
+
+      const token = await getToken(messaging, {
+        vapidKey: "BNVlHkambYsC5jsrLa0Zr-0OS05DJtxLkourbnIqtTdDDlYc-2Rt3yWEVVPgMc9pJ9vK8QnnZiPm_WwNcd6ApYQ",
+      });
+
+      console.log("FCM Token:", token);
+
+      return token;
+
+    } else if (permission === "denied") {
+
+      console.log("Permission denied");
+
+      alert(
+        "You denied notifications. You can enable them later from browser settings."
+      );
+
+      return null;
+
+    } else {
+
+      console.log("Permission dismissed");
+
+      return null;
+    }
+
+  } catch (err) {
+
+    console.error("Notification Error:", err);
+
+    return null;
+  }
+};
+
+
+    const listenMessages = () => {
+    onMessage(messaging, (payload) => {
+      console.log("Foreground message:", payload);
+
+      new Notification(payload.notification.title, {
+        body: payload.notification.body
+      });
+    });
+  };
+
+
+
+  console.log(fcm_token);
+
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -264,7 +364,7 @@ export default function AuthPage() {
         
         if (mode === "register") {} else {
           // FIX 2: Removed 'const' and passed { email, password } instead of 'data'
-          res = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe });
+          res = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe,fcm_token });
         }
 
         const data = await res.json();

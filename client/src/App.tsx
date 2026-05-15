@@ -85,6 +85,10 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
+
+import { messaging } from "./firebase";
+import { getToken, onMessage } from "./firebase/messaging";
+
 // ── Auth Guard Wrapper ───────────────────────────────────────────────────────
 // ── Auth Guard Wrapper ───────────────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
@@ -216,6 +220,11 @@ function AppShell() {
 
 // ── Main App Component ───────────────────────────────────────────────────────
 function App() {
+
+
+
+
+
   return (
     <QueryClientProvider client={queryClient}>
       <Router hook={useHashLocation}>
