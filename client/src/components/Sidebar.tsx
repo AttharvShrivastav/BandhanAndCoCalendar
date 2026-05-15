@@ -59,7 +59,7 @@ export default function Sidebar() {
     <aside className="w-full md:w-52 h-full flex-shrink-0 md:border-r border-border bg-card flex flex-col">
       {/* Logo */}
       <div className="px-4 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-85 transition-opacity cursor-pointer">
           {/* B-knot monogram mark */}
           <svg aria-label="Bandhan & Co." viewBox="0 0 32 32" fill="none" width="30" height="30">
             <rect width="32" height="32" rx="6" fill="hsl(210,69%,16%)"/>
@@ -74,7 +74,7 @@ export default function Sidebar() {
             </h1>
             <p className="text-[9px] text-muted-foreground leading-tight tracking-widest uppercase">Weddings, Managed Right</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Nav */}

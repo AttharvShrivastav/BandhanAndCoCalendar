@@ -106,9 +106,8 @@ export default function SettingsPage() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Security Settings State
   const [isDeletePinEnabled, setIsDeletePinEnabled] = useState(true);
-  const [currentDeletePin, setCurrentDeletePin] = useState(""); // <-- ADD THIS
+  const [currentDeletePin, setCurrentDeletePin] = useState(""); 
   const [newDeletePin, setNewDeletePin] = useState("");
 
   const [securityPwd, setSecurityPwd] = useState("");

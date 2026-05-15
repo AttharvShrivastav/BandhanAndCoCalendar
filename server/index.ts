@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import cors from "cors"; // <-- ADD THIS IMPORT
+import cors from "cors";
 import "dotenv/config";
 
 

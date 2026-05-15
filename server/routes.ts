@@ -107,9 +107,31 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     res.json({ message: "Logged in successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  // ─── Push Notifications (FCM) ───
+  app.patch("/api/auth/fcm-token", requireAuth, async (req: Request, res: Response) => {
+    const { token } = req.body;
+
+    // Token can be a string, or null (if we are clearing it on device logout)
+    if (token !== null && typeof token !== "string") {
+      return res.status(400).json({ error: "Invalid token format." });
+    }
+
+    try {
+      await storage.updateUserFcmToken(req.session.userId!, token);
+      res.json({ success: true, message: "Push notification token synced." });
+    } catch (error) {
+      console.error("FCM Token Sync Error:", error);
+      res.status(500).json({ error: "Failed to sync device token." });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    if (req.session?.userId) {
+      await storage.updateUserFcmToken(req.session.userId, null);
+    }
+    
     req.session.destroy(() => {
-      res.clearCookie("connect.sid"); // Ensure the browser drops the cookie
+      res.clearCookie("connect.sid");
       res.json({ success: true, message: "Logged out" });
     });
   });

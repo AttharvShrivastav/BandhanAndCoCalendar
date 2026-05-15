@@ -369,6 +369,9 @@ export interface IStorage {
   deleteTutorial(id: number): Promise<boolean>;
 
 
+  updateUserFcmToken(userId: number, token: string | null): Promise<void>;
+
+
   // Hindu Calendar
   getHinduEvents(year?: string): Promise<any[]>;
   bulkInsertHinduEvents(events: any[]): Promise<void>;
@@ -379,6 +382,13 @@ export class MySQLStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return user;
+  }
+  // Inside interface:
+  updateUserFcmToken(userId: number, token: string | null): Promise<void>;
+
+  // Inside MySQLStorage class (Auth & Orgs section):
+  async updateUserFcmToken(userId: number, token: string | null): Promise<void> {
+    await db.update(users).set({ fcmToken: token }).where(eq(users.id, userId));
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
